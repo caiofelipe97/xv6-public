@@ -109,3 +109,9 @@ int sys_setpriority(void){
     return -1;
   return setpriority(pid, prio);
 }
+
+int
+sys_cps ( void )
+{
+  return cps ();
+}
