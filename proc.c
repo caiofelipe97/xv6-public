@@ -6,6 +6,7 @@
 #include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
+#include "rand.h"
 
 struct {
   struct spinlock lock;
@@ -329,12 +330,27 @@ scheduler(void)
   for(;;){
     // Enable interrupts on this processor.
     sti();
+    long ticketsPassed = 0, totalTickets = 0;
+     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->state != RUNNABLE)
+        continue;
+
+      totalTickets = totalTickets + 32-p->priority;  
+    }
+
+    long winnerTicket = 1+random_at_most(totalTickets);
 
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
       if(p->state != RUNNABLE)
         continue;
+
+      ticketsPassed   += 32-p->priority;
+      if(ticketsPassed < winnerTicket){
+        continue;
+      }
+      cprintf("process - %s has won the lottery, it has priority %d and pid %d\n", p->name, p->priority, p->pid);
 
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
