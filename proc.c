@@ -90,6 +90,7 @@ found:
   p->state = EMBRYO;
   p->pid = nextpid++;
   p->priority = 10;    //default priority
+  p->priority_temp = 10;  //initial value
 
   release(&ptable.lock);
 
@@ -324,6 +325,54 @@ wait(void)
 void
 scheduler(void)
 {
+  
+  // random_algorithm();
+
+  struct proc *p;
+  struct cpu *c = mycpu();
+  c->proc = 0;
+  
+  for(;;){
+    // Enable interrupts on this processor.
+    sti();
+
+    acquire(&ptable.lock);
+
+    struct proc *chosen = 0;
+
+    uint lower = 32;
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->state != RUNNABLE)
+        continue;
+      if(p->priority_temp < lower){
+        lower = p->priority_temp;
+        chosen = p;
+      }
+    }
+    
+    if (chosen != 0) {
+      // Switch to chosen process.  It is the process's job
+      // to release ptable.lock and then reacquire it
+      // before jumping back to us.
+      chosen->priority_temp = chosen->priority;
+      chosen->usage += 1;
+
+      c->proc = chosen;
+      switchuvm(chosen);
+      chosen->state = RUNNING;
+
+      swtch(&(c->scheduler), chosen->context);
+      switchkvm();
+
+      // Process is done running for now.
+      // It should have changed its p->state before coming back.
+      c->proc = 0;
+    }
+    release(&ptable.lock);
+  }
+}
+
+void random_algorithm(void) {
   struct proc *p;
   struct cpu *c = mycpu();
   c->proc = 0;
@@ -594,18 +643,35 @@ cps()
 
     // Loop over process table looking for process with pid.
   acquire(&ptable.lock);
-  cprintf("name \t pid \t usage\t priority \t state \n");
+  cprintf("name \t pid \t usage\t priority \t priority_temp \t state \n");
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
       if ( p->state == SLEEPING )
-        cprintf("%s \t %d \t %d \t %d \t SLEEPING \n ", p->name, p->pid, p->usage, p->priority );
+        cprintf("%s \t %d \t %d \t %d \t\t %d \t\t SLEEPING \n ", p->name, p->pid, p->usage, p->priority, p->priority_temp );
       else if ( p->state == RUNNING )
-        cprintf("%s \t %d \t %d \t %d \t RUNNING \n ", p->name, p->pid, p->usage, p->priority  );
+        cprintf("%s \t %d \t %d \t %d \t\t %d \t\t RUNNING \n ", p->name, p->pid, p->usage, p->priority, p->priority_temp  );
       else if ( p->state == RUNNABLE)
-        cprintf("%s \t %d \t %d \t %d \t RUNNING \n ", p->name, p->pid, p->usage, p->priority  );
+        cprintf("%s \t %d \t %d \t %d \t\t %d \t\t RUNNING \n ", p->name, p->pid, p->usage, p->priority, p->priority_temp  );
 
   }
   
   release(&ptable.lock);
   
   return 22;
+}
+
+void decrement_all_priorities(void){
+  struct proc *p;
+
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+    if ( p->state == SLEEPING ){
+      p->priority_temp -= 2;
+    } else if (p->state == RUNNABLE ) {
+      p->priority_temp -= 1;
+    }
+    if(p->priority_temp  < 0) {
+      p->priority_temp = 0;
+    }
+  }
+  release(&ptable.lock);
 }

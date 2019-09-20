@@ -124,6 +124,8 @@ int             getpriority(int);
 int             setpriority(int, int);
 int             cps ( void );
 int             getusage(int);
+void            random_algorithm(void);
+void            decrement_all_priorities(void);
 
 // swtch.S
 void            swtch(struct context**, struct context*);
